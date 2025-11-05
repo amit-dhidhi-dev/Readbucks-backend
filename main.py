@@ -3,6 +3,7 @@ from database.connection import check_connection
 from routes.user_routes import router as user_router
 from routes.auth.google import router as google_auth_router
 from routes.auth.facebook import router as facebook_auth_router
+from routes.book_routes import router as book_router
 import uvicorn
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -25,15 +26,18 @@ app.add_middleware(
 )
 
 
-# Routes include karein
-app.include_router(user_router, prefix="/api/v1")
-
-
-
 # routes for google login
 app.include_router(google_auth_router)
 # routes for facebook login
 app.include_router(facebook_auth_router)
+
+# Routes include karein
+app.include_router(user_router, prefix="/api/v1")
+app.include_router(book_router, prefix="/api/v1")
+
+
+
+
 
 # Startup event
 @app.on_event("startup")

@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional 
 from fastapi import HTTPException
 from models.user_models import UserCreate, UserInDB, SocialAuthProvider, UserUpdate, QuizParticipation, ReadingProgress
-
+from routes.user_routes import users_collection
 
 
 class UserService:
