@@ -6,6 +6,9 @@ from routes.auth.facebook import router as facebook_auth_router
 from routes.book_routes import router as book_router
 import uvicorn
 from fastapi.middleware.cors import CORSMiddleware
+from utils.pdf_service import process_book 
+import asyncio  # Add this import
+import os
 
 
 # FastAPI app create karein
@@ -25,6 +28,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# // create folder for temp file 
+os.makedirs(os.environ["TEMP_DIR"], exist_ok=True)
+# os.makedirs(os.environ["TEMP_COVER"], exist_ok=True)
+
 
 # routes for google login
 app.include_router(google_auth_router)
@@ -43,7 +50,7 @@ app.include_router(book_router, prefix="/api/v1")
 @app.on_event("startup")
 async def startup_event():
     await check_connection();
-
+ 
 # Root endpoint
 @app.get("/")
 async def root():
@@ -58,10 +65,105 @@ async def root():
 async def health_check():
     return {"status": "healthy", "database": "connected"}
 
+
+# from utils.r2_utils import download_pdf_from_r2
+# # from utils.pdf_service import extract_toc_and_chapters, extract_toc_with_pymupdf
+
+
+# # from utils.toc_extractor import extract_toc_multilingual
+# # from utils.extractor import extract_toc_and_chapterss
+# from utils.chapter_extractor import detect_chapters, extract_toc_and_chapters
+# from utils.convert_utils import pdf_to_epub
+
+# def convert():
+#     base, ext = os.path.splitext(r"C:\Users\user\Desktop\readbucks.com\backend\uploads\tmpagizk8ax.pdf");
+#     print("base ",base)
+#     print("ext ",ext)
+#     path = pdf_to_epub(r"C:\Users\user\Desktop\readbucks.com\backend\uploads\tmpagizk8ax.pdf",r"C:\Users\user\Desktop\readbucks.com\backend\uploads\tmpagizk8ax_convert.epub" )
+#     print("output epub path is.. ",path)
+
+# convert();
+# def heelo():
+#     print('process start...')
+#     # pdf_path = download_pdf_from_r2('https://4e2de902c9c96022ca5a34538b962d83.r2.cloudflarestorage.com/ebookstorage/documents/final_with_pageno_20251107_000802_40227273.pdf')
+#     # pdf_path = download_pdf_from_r2(generate_get_url('documents/final_with_pageno_20251107_000802_40227273.pdf'))
+#     # print('downloaded file path',pdf_path)
+#     # toc_data = extract_toc_and_chapters(r"C:/Users/user/AppData/Local/Temp/tmpepg3yv7c.pdf")
+#     # print('extracted toc or chapters',toc_data)
+#     print('|||||||||||')
+#     print('|||||||||||')
+#     print('|||||||||||')
+#     print('|||||||||||')
+#     print('|||||||||||')
+#     print('|||||||||||')
+#     print('|||||||||||')
+#     print('|||||||||||')
+#     # toc = extract_toc_with_pymupdf(r"C:/Users/user/AppData/Local/Temp/tmpepg3yv7c.pdf")
+#     # toc  = extract_toc_and_chapterss(r"C:/Users/user/AppData/Local/Temp/tmpepg3yv7c.pdf")
+#     # print('extracted toc or chapters  ',toc)
+#     # data =  process_book();
+#     # print('work done',data)
+#     chapters = detect_chapters(r"C:/Users/user/AppData/Local/Temp/tmpepg3yv7c.pdf")
+#     print('chapter is ',chapters)
+
+# heelo()
+
+from utils.book_convertor import BookConvertor
+from models.book_models import BookInDB
+data =  {
+  "title": "startups",
+  "subtitle": "",
+  "author": "amit dhdihi",
+  "co_authors": [],
+  "publisher": "readbucks",
+  "isbn": '',
+  "description": "this is short description about startups",
+  "long_description": "",
+  "categories": [
+    "educational"
+  ],
+  "language": "english",
+  "tags": [],
+  "access_level": "paid",
+  "status": "published",
+  "cover_image_url": "https://4e2de902c9c96022ca5a34538b962d83.r2.cloudflarestorage.com/ebookstorage/images/cover_20251109_144419_0d057838.png",
+  "book_content_url": {
+    "docx": None,
+    "pdf": None,
+    "epub": "https://4e2de902c9c96022ca5a34538b962d83.r2.cloudflarestorage.com/ebookstorage/documents/calibre_20251109_144423_249310e7.epub"
+  },
+  "sample_chapter_url": None,
+  "price": 0.0,
+  "discount_price": 0.0,
+  "is_free": True,
+  "total_pages": 233,
+  "word_count": 0,
+  "publication_date": "2025-11-03 00:00:00+00:00",
+  "edition": "1st",
+  "estimated_reading_time": 0,
+  "difficulty_level": "beginner",
+  "id": "69105b83daa2369b47fba507",
+  "chapters": [],
+  "quizzes": [],
+  "reviews": [],
+  "total_ratings": 0,
+  "average_rating": 0.0,
+  "total_reviews": 0,
+  "total_purchases": 0,
+  "total_reads": 0,
+  "total_quiz_attempts": 0,
+  "created_by": "690787a7a6273a592459f2e1",
+  "created_at": "2025-11-09 09:14:43.327000",
+  "updated_at": "2025-11-09 09:14:43.327000",
+  "published_at": "2025-11-09 09:14:43.327000"
+}
+BookConvertor(BookInDB(**data) )
+
 if __name__ == "__main__":
+    # asyncio.run(heelo());
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
         port=8000,
-        reload=True
+        reload=False
     )

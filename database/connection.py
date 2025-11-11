@@ -9,7 +9,7 @@ DATABASE_NAME = os.getenv("DATABASE_NAME", "readbucks_db")
 
 async_client = AsyncIOMotorClient(MONGODB_URL)
 database = async_client[DATABASE_NAME]
-
+books_collection = database["books"]
 
 async def check_connection():
     try:

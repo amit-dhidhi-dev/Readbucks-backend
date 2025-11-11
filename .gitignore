@@ -13,7 +13,7 @@ __pycache__/
 
 # FastAPI / Uvicorn
 *.log
-
+documents/
 # Node / React
 node_modules/
 dist/

@@ -70,20 +70,6 @@ class Review(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     is_verified_purchase: bool = False
 
-# class PyObjectId(ObjectId):
-    # @classmethod
-    # def __get_validators__(cls):
-    #     yield cls.validate
-
-    # @classmethod
-    # def validate(cls, v):
-    #     if not ObjectId.is_valid(v):
-    #         raise ValueError("Invalid objectid")
-    #     return ObjectId(v)
-
-    # @classmethod
-    # def __modify_schema__(cls, field_schema):
-    #     field_schema.update(type="string")
 
 class PyObjectId:
     """Pydantic-v2-compatible ObjectId wrapper."""
@@ -105,6 +91,12 @@ class PyObjectId:
         return {"type": "string", "pattern": "^[0-9a-fA-F]{24}$"}
 
 
+# two file for book content (pdf/epub)
+class BookConentType(BaseModel):
+    docx: Optional[HttpUrl] = None
+    pdf: Optional[HttpUrl]= None
+    epub: Optional[HttpUrl] = None
+
 # Base Book Model
 class BookBase(BaseModel):
     title: str
@@ -123,7 +115,7 @@ class BookBase(BaseModel):
 
     # Media URLs
     cover_image_url: HttpUrl
-    book_content_url: HttpUrl  # Main book content URL (PDF/EPUB/etc)
+    book_content_url: Optional[BookConentType] = None  # Main book content URL (PDF/EPUB/etc)
     sample_chapter_url: Optional[HttpUrl] = None
 
     # Pricing
@@ -146,9 +138,6 @@ class BookCreate(BookBase):
     quizzes: List[Quiz] = []
 
 
-# class BookCreate(BookBase):
-#     chapters: Optional[Chapter] = None
-#     quizzes: Optional[Quiz] = None
 
 
 class BookUpdate(BaseModel):
@@ -159,7 +148,7 @@ class BookUpdate(BaseModel):
     discount_price: Optional[float] = None
     status: Optional[BookStatus] = None
     cover_image_url: Optional[HttpUrl] = None
-    book_content_url: Optional[HttpUrl] = None
+    book_content_url: Optional[BookConentType] = None
     tags: Optional[List[str]] = None
 
 class BookInDB(BookBase):
@@ -221,7 +210,7 @@ class BookDetailResponse(BookResponse):
     publisher: str
     isbn: Optional[str] = None
     tags: List[str] = []
-    book_content_url: Optional[str] = None  # Only for paid users
+    book_content_url: Optional[BookConentType] = None  # Only for paid users
     sample_chapter_url: Optional[str] = None
     word_count: int
     edition: str

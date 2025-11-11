@@ -5,25 +5,31 @@ from bson import ObjectId
 import os
 from typing import List, Optional
 from models.book_models import BookCreate, BookUpdate, BookInDB, BookResponse, BookDetailResponse, BookSearchRequest, BookSearchFilters, Quiz, Review, BookCategory, BookLanguage, BookAccessLevel, BookStatus
-from database.connection import database
+from database.connection import database, books_collection
 from typing import Dict, Any
-from utils.dependency import get_current_user
+from utils.dependency import get_current_user, get_content_type, generate_unique_filename
 from utils.token import  verify_access_token 
 from datetime import datetime
 from pydantic.json import pydantic_encoder
 import json
+# from botocore.client import Config
+# from boto3 import client
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from urllib.parse import urlparse
+from utils.r2_utils import generate_get_url, generate_put_url
+from utils.book_convertor import BookConvertor
 
-# app = FastAPI()
-# security = HTTPBearer()
 
 router = APIRouter()
 
-# MongoDB connection
-# MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
-# client = AsyncIOMotorClient(MONGODB_URL)
-# db = client["ebook_platform"]
-# books_collection = db["books"]
-books_collection = database["books"]
+
+
+# s3 = client("s3", endpoint_url=os.environ["R2_ENDPOINT"],
+#             aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
+#             aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
+#             config=Config(signature_version="s3v4"))
+
 
 class BookService:
     @staticmethod
@@ -262,25 +268,23 @@ async def create_book(book_data: BookCreate, Authorization:str = Header(str) ):
         
     data =  verify_access_token(token);
     book = await BookService.create_book(book_data, data['user_id'])
+    
+    #   start 2 back background  process
+    # 1. file ko convert karo 
+    # case 1: docx
+         # convert to epub
+         # convert to pdf
+    # case 2: epub
+        # convert to pdf
+    # case 3 : pdf
+         # convert to epub         
+    # 2. extract toc or chapter from pdf
+    # start process run BookConvertor
+    BookConvertor(book);
     return book_in_db_to_response(book)
-    # print('sign',sign)
-    # print(' token',token)
-    # print('user_id',data['user_id'])    
-    # return {"received": book.dict()}
+  
 
 
-# @router.post("/books/", response_model=BookResponse, status_code=status.HTTP_201_CREATED)
-# async def create_book(book_data: BookCreate, user_id: str = Depends(get_current_user)):
-#     book = await BookService.create_book(book_data, user_id)
-#     return book_in_db_to_response(book)
-# @router.post("/books/", response_model=BookResponse, status_code=status.HTTP_201_CREATED)
-# async def create_book(book_data: BookCreate, user_id: str):
-#     book = await BookService.create_book(book_data, user_id)
-#     return book_in_db_to_response(book)
-# # @router.post("/books/", response_model=BookResponse, status_code=status.HTTP_201_CREATED)
-# # async def create_book(book_data: BookCreate, user_id: str = Depends(get_current_user)):
-# #     book = await BookService.create_book(book_data, user_id)
-# #     return book_in_db_to_response(book)
 
 @router.get("/books/", response_model=Dict[str, Any])
 async def get_books(
@@ -305,8 +309,34 @@ async def get_books(
         limit=limit,
         filters=filters
     )
+    
+    # url = book.cover_image_url
+    # path = urlparse(url).path
+    # filename = os.path.basename(path)
+    # print("filename",filename)
+    # signed_url = await generate_get_url(f"images/{filename}")
+    # print('signed_url',signed_url)
+    # book.cover_image_url=signed_url
+    
     print('inside fetch book functions', search_request)
     result = await BookService.search_books(search_request)
+    
+    for book in result["books"]:
+        if not book.cover_image_url:
+            continue  # skip missing images
+        url = str(book.cover_image_url)
+        path = urlparse(url).path
+        filename = os.path.basename(path)
+        # print("filename",filename)
+        signed_url =  generate_get_url(f"images/{filename}")
+        # print('signed_url',signed_url)
+        book.cover_image_url=signed_url
+        url=str(book.book_content_url)
+        path = urlparse(url).path
+        filename=os.path.basename(path)
+        signed_url=generate_get_url(f"documents/{filename}")
+        book.book_content_url=signed_url
+    
     
     return {
         "books": [book_in_db_to_response(book) for book in result["books"]],
@@ -315,6 +345,9 @@ async def get_books(
         "limit": result["limit"],
         "has_next": result["has_next"]
     }
+
+
+
 
 @router.get("/books/{book_id}", response_model=BookDetailResponse)
 async def get_book(book_id: str,  Authorization:str = Header(str)):
@@ -346,16 +379,29 @@ async def get_book(book_id: str,  Authorization:str = Header(str)):
         check_user_book_access(user["user_id"], book_id)
     )
     
+    url = str(book.cover_image_url)
+    path = urlparse(url).path
+    filename = os.path.basename(path)
+    # print("filename",filename)
+    signed_url =  generate_get_url(f"images/{filename}")
+    # print('signed_url',signed_url)
+    book.cover_image_url=signed_url
+    url=str(book.book_content_url)
+    path = urlparse(url).path
+    filename=os.path.basename(path)
+    signed_url=generate_get_url(f"documents/{filename}")
+    book.book_content_url=signed_url
+   
+    
+    
     return book_in_db_to_response(book, include_content=has_access)
 
 @router.put("/books/{book_id}", response_model=BookResponse)
 async def update_book(book_id: str, update_data: BookUpdate, Authorization: str = Header(str)):
     book = await BookService.update_book(book_id, update_data)
     return book_in_db_to_response(book)
-# @router.put("/books/{book_id}", response_model=BookResponse)
-# async def update_book(book_id: str, update_data: BookUpdate, user: Dict = Depends(get_current_user)):
-#     book = await BookService.update_book(book_id, update_data)
-#     return book_in_db_to_response(book)
+
+
 @router.post("/books/{book_id}/quizzes", response_model=BookDetailResponse)
 async def add_quiz_to_book(book_id: str, quiz_data: Quiz, user: Dict = Depends(get_current_user)):
     book = await BookService.add_quiz_to_book(book_id, quiz_data)
@@ -403,21 +449,69 @@ async def delete_book(book_id: str, Authorization: str = Header(None)):
 
     return {"message": "Book deleted successfully", "book_id": str(book_id)}
     
-# MongoDB Indexes
-# @router.on_event("startup")
-# async def create_indexes():
-#     indexes = await books_collection.index_information()
-#     print(indexes)
-#     await books_collection.create_index([("title", "text"), ("description", "text"), ("author", "text")])
-#     await books_collection.create_index([("categories", 1)])
-#     await books_collection.create_index([("language", 1)])
-#     await books_collection.create_index([("price", 1)])
-#     await books_collection.create_index([("average_rating", -1)])
-#     await books_collection.create_index([("publication_date", -1)])
-#     await books_collection.create_index([("created_at", -1)])
-#     await books_collection.create_index([("status", 1)])
-#     await books_collection.create_index([("access_level", 1)])
-#     print("Book indexes created successfully")
+
+# for generate presign url for upload image and content of ebook
+# Request model for validation
+class UploadRequest(BaseModel):
+    filename: str
+    file_type: str = "image"  # can be "image", "document", etc.
+
+
+@router.post("/get-upload-url")
+def get_upload_url(request: UploadRequest):
+    filename = request.filename
+    file_type = request.file_type
+    
+    # Validate file type
+    if file_type == "image":
+        allowed_extensions = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'}
+        file_extension = filename.lower().split('.')[-1]
+        
+        if file_extension not in allowed_extensions:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid image format. Allowed: {', '.join(allowed_extensions)}"
+            )
+            
+    if file_type == "document":
+        allowed_extensions = {'pdf', 'doc', 'docx', 'epub'}
+        file_extension = filename.lower().split('.')[-1]
+        
+        if file_extension not in allowed_extensions:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid document format. Allowed: {', '.join(allowed_extensions)}"
+            )
+    
+    content_type = get_content_type(filename, file_type)
+    
+    # Use different folders based on file type
+    folder = "images" if file_type == "image" else "documents"
+    key = f"{folder}/{generate_unique_filename(filename)}"
+    
+    # url = s3.generate_presigned_url(
+    #     ClientMethod="put_object",
+    #     Params={
+    #         "Bucket": os.environ["R2_BUCKET"], 
+    #         "Key": key, 
+    #         "ContentType": content_type
+    #     },
+    #     ExpiresIn=3600
+    # )
+    
+    url = generate_put_url(key=key, content_type=content_type)
+    
+    fileUrl= f"{os.environ['R2_ENDPOINT']}/{os.environ['R2_BUCKET']}/{key}"
+    
+    return {
+        "upload_url": url, 
+        "key": key, 
+        "fileUrl":fileUrl,
+        "content_type": content_type,
+        "expires_in": 3600
+    }
+
+
 
 
 @router.on_event("startup")
@@ -446,4 +540,4 @@ async def create_indexes():
     await books_collection.create_index([("status", 1)])
     await books_collection.create_index([("access_level", 1)])
 
-    print("Book indexes created successfully")
+    # print("Book indexes created successfully")
