@@ -36,7 +36,9 @@ class BookConvertor:
         # self.specialize.docx_to_epub("./documents/ebook_final.docx", "./documents/ebook_final.epub")
         # self.specialize.docx_to_pdf("./documents/ebook_final.docx","./documents/ebook_final.pdf")
         # convert_epub_to_pdf("./documents/ebook_final.epub", "./documents/ebook_final_converted.pdf")
-        pdf_to_epub_with_cover("./documents/ebook_final_converted.pdf", "./documents/ebook_final.epub",  dpi=300, verbose=True)
+        # pdf_to_epub_with_cover("./documents/ebook_final_converted.pdf", "./documents/ebook_final.epub",  dpi=300, verbose=True)
+        # try to convert pdf to epub using easyOCR
+        
         # decide what to do
         if self.ext == "epub":
             """
