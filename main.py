@@ -66,47 +66,7 @@ async def health_check():
     return {"status": "healthy", "database": "connected"}
 
 
-# from utils.r2_utils import download_pdf_from_r2
-# # from utils.pdf_service import extract_toc_and_chapters, extract_toc_with_pymupdf
 
-
-# # from utils.toc_extractor import extract_toc_multilingual
-# # from utils.extractor import extract_toc_and_chapterss
-# from utils.chapter_extractor import detect_chapters, extract_toc_and_chapters
-# from utils.convert_utils import pdf_to_epub
-
-# def convert():
-#     base, ext = os.path.splitext(r"C:\Users\user\Desktop\readbucks.com\backend\uploads\tmpagizk8ax.pdf");
-#     print("base ",base)
-#     print("ext ",ext)
-#     path = pdf_to_epub(r"C:\Users\user\Desktop\readbucks.com\backend\uploads\tmpagizk8ax.pdf",r"C:\Users\user\Desktop\readbucks.com\backend\uploads\tmpagizk8ax_convert.epub" )
-#     print("output epub path is.. ",path)
-
-# convert();
-# def heelo():
-#     print('process start...')
-#     # pdf_path = download_pdf_from_r2('https://4e2de902c9c96022ca5a34538b962d83.r2.cloudflarestorage.com/ebookstorage/documents/final_with_pageno_20251107_000802_40227273.pdf')
-#     # pdf_path = download_pdf_from_r2(generate_get_url('documents/final_with_pageno_20251107_000802_40227273.pdf'))
-#     # print('downloaded file path',pdf_path)
-#     # toc_data = extract_toc_and_chapters(r"C:/Users/user/AppData/Local/Temp/tmpepg3yv7c.pdf")
-#     # print('extracted toc or chapters',toc_data)
-#     print('|||||||||||')
-#     print('|||||||||||')
-#     print('|||||||||||')
-#     print('|||||||||||')
-#     print('|||||||||||')
-#     print('|||||||||||')
-#     print('|||||||||||')
-#     print('|||||||||||')
-#     # toc = extract_toc_with_pymupdf(r"C:/Users/user/AppData/Local/Temp/tmpepg3yv7c.pdf")
-#     # toc  = extract_toc_and_chapterss(r"C:/Users/user/AppData/Local/Temp/tmpepg3yv7c.pdf")
-#     # print('extracted toc or chapters  ',toc)
-#     # data =  process_book();
-#     # print('work done',data)
-#     chapters = detect_chapters(r"C:/Users/user/AppData/Local/Temp/tmpepg3yv7c.pdf")
-#     print('chapter is ',chapters)
-
-# heelo()
 
 from utils.book_convertor import BookConvertor
 from models.book_models import BookInDB

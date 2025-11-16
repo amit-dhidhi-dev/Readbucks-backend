@@ -57,6 +57,21 @@ class UserBase(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)       
 
+
+class MyLibrary(BaseModel):
+    book_ids: str
+    book_name: str
+    book_author: str
+    book_cover: str
+    book_reading_progress: float = 0.0
+    book_quiz_participated: int = 0
+    book_quiz_won: int = 0
+    book_quiz_prizes_won: int = 0
+    book_quiz_score: float = 0.0
+    added_at: datetime = Field(default_factory=datetime.utcnow)
+    
+
+
 class UserCreate(UserBase):
     social_auth: SocialAuthInfo
    
@@ -72,6 +87,7 @@ class UserInDB(UserBase):
     reading_progress: List[ReadingProgress] = []
     quiz_participations: List[QuizParticipation] = []
     purchase_history: List[PurchaseHistory] = []
+    my_library: List[MyLibrary] = []
     reading_goals: Dict[str, Any] = {}
     total_quiz_wins: int = 0
     total_prize_money: float = 0.0
