@@ -67,13 +67,13 @@ class UserService:
         return UserInDB(**user_dict)
 
     @staticmethod
-    async def get_user_by_id(user_id: str) :
+    async def get_user_by_id(user_id: str):
         user_data = await users_collection.find_one({"_id": ObjectId(user_id)})
 
         if user_data and isinstance(user_data.get("_id"), ObjectId):
             user_data["_id"] = str(user_data["_id"])
         if user_data:
-            # print("User data found:", UserInDB(**user_data))                
+            # print("User data found:", UserInDB(**user_data))
             # return UserInDB(**user_data)
             return user_data
         return None
@@ -214,6 +214,54 @@ async def get_user_stats(user_id: str):
 
 
 # routes/user_routes.py
+# @router.post("/users/library")
+# async def add_book_to_library(token: str, book_data: dict = None):
+#     try:
+#         # Validate token
+#         payload = verify_access_token(token)
+#         user_id = payload["user_id"]
+
+#         # Get user
+#         user = await UserService.get_user_by_id(user_id)
+#         if not user:
+#             raise HTTPException(status_code=404, detail="User not found")
+
+#         # print('in my library section', user)
+
+#         # Validate book_data
+#         if not book_data:
+#             raise HTTPException(status_code=400, detail="Book data is required")
+
+#         # Create book dictionary with default values
+#         book_dict = {
+#             "book_ids": str(book_data.get("book_id", "")),  # Ensure string
+#             "book_name": book_data.get("book_name", ""),
+#             "book_author": book_data.get("book_author", ""),
+#             "book_cover": book_data.get("book_cover", ""),
+#             "book_reading_progress": float(book_data.get("book_reading_progress", 0.0)),
+#             "book_quiz_participated": 0,
+#             "book_quiz_won": 0,
+#             "book_quiz_prizes_won": 0,
+#             "book_quiz_score": 0.0,
+#             "added_at": datetime.utcnow(),
+#         }
+
+#         # Update database
+#         await users_collection.update_one(
+#             {"_id": ObjectId(user_id)},
+#             {
+#                 "$push": {"my_library": book_dict},
+#                 "$set": {"updated_at": datetime.utcnow()},
+#             },
+#         )
+
+#         return {"message": "Book added to library successfully"}
+
+#     except Exception as e:
+#         print(f"Error adding book to library: {str(e)}")
+#         raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.post("/users/library")
 async def add_book_to_library(token: str, book_data: dict = None):
     try:
@@ -225,20 +273,92 @@ async def add_book_to_library(token: str, book_data: dict = None):
         user = await UserService.get_user_by_id(user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        
-        # print('in my library section', user)
-         
+
         # Validate book_data
         if not book_data:
             raise HTTPException(status_code=400, detail="Book data is required")
 
-        # Create book dictionary with default values
+        book_id = str(book_data.get("book_id", ""))
+        reading_progress = float(book_data.get("book_reading_progress", 0.0))
+
+        # Try to update existing book first
+        update_result = await users_collection.update_one(
+            {"_id": ObjectId(user_id), "my_library.book_ids": book_id},
+            {
+                "$set": {
+                    "my_library.$.book_name": book_data.get("book_name", ""),
+                    "my_library.$.book_author": book_data.get("book_author", ""),
+                    "my_library.$.book_cover": book_data.get("book_cover", ""),
+                    "my_library.$.book_reading_progress": reading_progress,
+                    "updated_at": datetime.utcnow(),
+                }
+            },
+        )
+
+        # If no book was updated (doesn't exist), insert new one
+        if update_result.modified_count == 0:
+            book_dict = {
+                "book_ids": book_id,
+                "book_name": book_data.get("book_name", ""),
+                "book_author": book_data.get("book_author", ""),
+                "book_cover": book_data.get("book_cover", ""),
+                "book_reading_progress": reading_progress,
+                "book_quiz_participated": 0,
+                "book_quiz_won": 0,
+                "book_quiz_prizes_won": 0,
+                "book_quiz_score": 0.0,
+                "added_at": datetime.utcnow(),
+            }
+
+            await users_collection.update_one(
+                {"_id": ObjectId(user_id)},
+                {
+                    "$push": {"my_library": book_dict},
+                    "$set": {"updated_at": datetime.utcnow()},
+                },
+            )
+            return {"message": "Book added to library successfully"}
+        else:
+            return {"message": "Book updated in library successfully"}
+
+    except Exception as e:
+        print(f"Error adding book to library: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/users/purchase-history")
+async def add_purchase_history(token: str, history: dict = None):
+    try:
+        # Validate token
+        payload = verify_access_token(token)
+        user_id = payload["user_id"]
+
+        # Get user
+        user = await UserService.get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Validate book_data
+        if not history:
+            raise HTTPException(status_code=400, detail="Book data is required")
+
+        book_id = str(history.get("book_id", ""))
+
+        # If no book was updated (doesn't exist), insert new one
+
+        history_dict = {
+            "book_id": book_id,
+            "purchase_date": datetime.utcnow(),
+            "amount_paid": history.get("amount_paid", ""),
+            "transaction_id": history.get("transaction_id", ""),
+        }
+
         book_dict = {
-            "book_ids": str(book_data.get("book_id", "")),  # Ensure string
-            "book_name": book_data.get("book_name", ""),
-            "book_author": book_data.get("book_author", ""),
-            "book_cover": book_data.get("book_cover", ""),
-            "book_reading_progress": float(book_data.get("book_reading_progress", 0.0)),
+            "book_ids": book_id,
+            "book_name": history.get("book_name", ""),
+            "book_author": history.get("book_author", ""),
+            "book_cover": history.get("book_cover", ""),
+            "book_reading_progress": history.get("book_reading_progress", ""),
             "book_quiz_participated": 0,
             "book_quiz_won": 0,
             "book_quiz_prizes_won": 0,
@@ -246,19 +366,17 @@ async def add_book_to_library(token: str, book_data: dict = None):
             "added_at": datetime.utcnow(),
         }
 
-        # Update database
         await users_collection.update_one(
             {"_id": ObjectId(user_id)},
             {
-                "$push": {"my_library": book_dict},
+                "$push": {"purchase_history": history_dict, "my_library": book_dict},
                 "$set": {"updated_at": datetime.utcnow()},
             },
         )
-
-        return {"message": "Book added to library successfully"}
+        return {"message": "purchase history added successfully"}
 
     except Exception as e:
-        print(f"Error adding book to library: {str(e)}")
+        print(f"Error adding purchase history: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

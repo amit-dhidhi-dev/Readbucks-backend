@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from utils.pdf_service import process_book 
 import asyncio  # Add this import
 import os
-
+import routes.payment_routes as payment_routes
 
 # FastAPI app create karein
 app = FastAPI(
@@ -42,6 +42,8 @@ app.include_router(facebook_auth_router)
 app.include_router(user_router, prefix="/api/v1")
 app.include_router(book_router, prefix="/api/v1")
 
+# Include payment routes
+app.include_router(payment_routes.router)
 
 
 
@@ -117,7 +119,7 @@ data =  {
   "updated_at": "2025-11-09 09:14:43.327000",
   "published_at": "2025-11-09 09:14:43.327000"
 }
-BookConvertor(BookInDB(**data) )
+# BookConvertor(BookInDB(**data) )
 
 if __name__ == "__main__":
     # asyncio.run(heelo());

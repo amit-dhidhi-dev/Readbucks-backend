@@ -15,6 +15,7 @@ class BookCategory(str, Enum):
     SCIENCE = "science"
     HISTORY = "history"
     BIOGRAPHY = "biography"
+    FINANCE = "finance"
     OTHER = "other"
 
 class BookLanguage(str, Enum):

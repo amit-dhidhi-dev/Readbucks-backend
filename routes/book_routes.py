@@ -44,12 +44,6 @@ from utils.book_convertor import BookConvertor
 router = APIRouter()
 
 
-# s3 = client("s3", endpoint_url=os.environ["R2_ENDPOINT"],
-#             aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
-#             aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
-#             config=Config(signature_version="s3v4"))
-
-
 class BookService:
     @staticmethod
     async def create_book(book_data: BookCreate, created_by: str) -> BookInDB:
@@ -70,7 +64,7 @@ class BookService:
     async def get_book_by_id(book_id: str) -> Optional[BookInDB]:
         try:
             book_data = await books_collection.find_one({"_id": ObjectId(book_id)})
-            print("book_data ->", book_data)
+            # print("book_data ->", book_data)
             if book_data:
                 return BookInDB(**book_data)
             return None
@@ -296,7 +290,8 @@ def book_in_db_to_response(
             total_purchases=book.total_purchases,
             total_reads=book.total_reads,
         )
-
+        
+    
     return BookResponse(**base_data)
 
 
@@ -333,16 +328,25 @@ async def create_book(book_data: BookCreate, Authorization: str = Header(str)):
     return book_in_db_to_response(book)
 
 
+# Add input validation
 @router.get("/books/", response_model=Dict[str, Any])
 async def get_books(
-    page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
     category: Optional[BookCategory] = None,
     language: Optional[BookLanguage] = None,
     min_price: Optional[float] = Query(None, ge=0),
     max_price: Optional[float] = Query(None, ge=0),
     access_level: Optional[BookAccessLevel] = None,
 ):
+    print('fetch books')
+    # Validate price range
+    if min_price is not None and max_price is not None and min_price > max_price:
+        raise HTTPException(
+            status_code=400, 
+            detail="min_price cannot be greater than max_price"
+        )
+    
     filters = BookSearchFilters(
         categories=[category] if category else None,
         languages=[language] if language else None,
@@ -350,36 +354,25 @@ async def get_books(
         max_price=max_price,
         access_level=access_level,
     )
-
+    
     search_request = BookSearchRequest(page=page, limit=limit, filters=filters)
-
-    # url = book.cover_image_url
-    # path = urlparse(url).path
-    # filename = os.path.basename(path)
-    # print("filename",filename)
-    # signed_url = await generate_get_url(f"images/{filename}")
-    # print('signed_url',signed_url)
-    # book.cover_image_url=signed_url
-
-    print("inside fetch book functions", search_request)
     result = await BookService.search_books(search_request)
-
+    
+    # Process signed URLs
     for book in result["books"]:
-        if not book.cover_image_url:
-            continue  # skip missing images
-        url = str(book.cover_image_url)
-        path = urlparse(url).path
-        filename = os.path.basename(path)
-        # print("filename",filename)
-        signed_url = generate_get_url(f"images/{filename}")
-        # print('signed_url',signed_url)
-        book.cover_image_url = signed_url
-        url = str(book.book_content_url)
-        path = urlparse(url).path
-        filename = os.path.basename(path)
-        signed_url = generate_get_url(f"documents/{filename}")
-        book.book_content_url = signed_url
-
+        if book.cover_image_url:
+            url = str(book.cover_image_url)
+            path = urlparse(url).path
+            filename = os.path.basename(path)
+            book.cover_image_url = generate_get_url(f"images/{filename}")
+        
+        if book.book_content_url:
+            url = str(book.book_content_url.epub)
+            print('url->',url)
+            path = urlparse(url).path
+            filename = os.path.basename(path)
+            book.book_content_url = generate_get_url(f"documents/{filename}")
+    
     return {
         "books": [book_in_db_to_response(book) for book in result["books"]],
         "total": result["total"],
@@ -387,6 +380,81 @@ async def get_books(
         "limit": result["limit"],
         "has_next": result["has_next"],
     }
+
+
+
+@router.get("/book/{book_id}")
+async def get_book_by_id(book_id:str):   
+    book = await BookService.get_book_by_id(book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+ 
+    url = str(book.cover_image_url)
+    path = urlparse(url).path
+    filename = os.path.basename(path)
+    # print("filename",filename)
+    signed_url = generate_get_url(f"images/{filename}")
+    # print('signed_url',signed_url)
+    book.cover_image_url = signed_url
+    # url = str(book.book_content_url)
+    # path = urlparse(url).path
+    # filename = os.path.basename(path)
+    # signed_url = generate_get_url(f"documents/{filename}")
+    # book.book_content_url = signed_url
+    
+    for key, value in book.book_content_url:
+        if value:
+            url = str(value)
+            path = urlparse(url).path
+            filename = os.path.basename(path)
+            signed_url = generate_get_url(f"documents/{filename}")
+            setattr(book.book_content_url, key, signed_url)
+
+    return book_in_db_to_response(book) 
+
+
+@router.get("/book_detail/{book_id}")
+async def get_book_detail_by_id(book_id: str):
+    # Validate book_id format
+    if not ObjectId.is_valid(book_id):
+        raise HTTPException(status_code=400, detail="Invalid book ID format")
+    
+    # Get book
+    book = await BookService.get_book_by_id(book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    
+    # Convert to dict and handle ObjectId
+    book_dict = dict(book)
+    book_dict["id"] = str(book_dict.pop("_id", book_id))
+    
+    # Generate signed URL for cover image
+    if book_dict.get("cover_image_url"):
+        cover_url = generate_signed_url(book_dict["cover_image_url"], "images")
+        book_dict["cover_image_url"] = cover_url
+    
+    # Generate signed URLs for book content
+    if book_dict.get("book_content_url"):
+        if isinstance(book_dict["book_content_url"], dict):
+            for format_key, url in book_dict["book_content_url"].items():
+                if url:
+                    signed_url = generate_signed_url(url, "documents")
+                    book_dict["book_content_url"][format_key] = signed_url
+        elif isinstance(book_dict["book_content_url"], str):
+            signed_url = generate_signed_url(book_dict["book_content_url"], "documents")
+            book_dict["book_content_url"] = {"pdf": signed_url}
+    
+    return book_dict
+
+def generate_signed_url(url: str, folder: str) -> str:
+    """Helper function to generate signed URLs"""
+    from urllib.parse import urlparse
+    import os
+    
+    path = urlparse(str(url)).path
+    filename = os.path.basename(path)
+    return generate_get_url(f"{folder}/{filename}")
+
 
 
 @router.get("/books/{book_id}")
