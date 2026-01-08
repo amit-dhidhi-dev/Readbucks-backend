@@ -1,7 +1,5 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Query
 from database.connection import database, users_collection
-
-# from models.user_models import User, UserInDB, UpdateUser
 from bson import ObjectId
 from typing import List
 
@@ -22,7 +20,7 @@ from models.user_models import (
     QuizParticipation,
     ReadingProgress,
 )
-from database.connection import database, users_collection
+from database.connection import database, users_collection, books_collection
 from datetime import datetime
 from typing import Optional
 from bson import ObjectId
@@ -379,6 +377,163 @@ async def add_purchase_history(token: str, history: dict = None):
         print(f"Error adding purchase history: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
+# get user library books details
+@router.get("/user-library")
+async def get_user_library_books(userId: str = None):    
+    try:
+        # Validate input
+
+        if not userId or not userId.strip():
+            raise HTTPException(status_code=400, detail="userId parameter is required")
+        
+        if not ObjectId.is_valid(userId):
+            raise HTTPException(status_code=400, detail="Invalid user ID format")
+        
+        # Get user document
+        user = await users_collection.find_one({"_id": ObjectId(userId)})
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Handle case where my_library doesn't exist
+        if "my_library" not in user:
+            return {
+                "user_id": userId,
+                "book_data": [],
+                "message": "Library is empty"
+            }
+        
+        my_library = user.get("my_library", [])
+        
+        # If my_library is empty list
+        if not my_library:
+            return {
+                "user_id": userId,
+                "book_data": [],
+                "message": "Library is empty"
+            }
+        
+        # Extract book_ids from the list of objects
+   
+        book_ids = []
+        for item in my_library:
+            if isinstance(item, dict) and "book_ids" in item:
+                # Convert string book_id to ObjectId
+                try:
+                    if ObjectId.is_valid(item["book_ids"]):
+                        book_ids.append(ObjectId(item["book_ids"]))
+                except:
+                    # Skip invalid book_ids
+                    continue
+        
+        # If no valid book_ids found
+        if not book_ids:
+            return {
+                "user_id": userId,
+                "book_data": [],
+                "message": "No valid book IDs found in library"
+            }
+        
+        # Get complete book details from books collection
+        books_from_db = await books_collection.find(
+            {"_id": {"$in": book_ids}}
+        ).to_list(length=None)
+        
+        # Create a mapping of book_id to book document for quick lookup
+        book_map = {}
+        for book in books_from_db:
+            book_id_str = str(book["_id"])
+            # Clean up the book document for response
+            book["_id"] = book_id_str
+            book_map[book_id_str] = book
+        
+        # Enrich my_library items with complete book data
+        enriched_library = []
+        for library_item in my_library:
+            if isinstance(library_item, dict) and "book_ids" in library_item:
+                book_id = library_item["book_ids"]
+                
+                # Create enriched item
+                enriched_item = {
+                    "library_info": {
+                        "added_at": library_item.get("added_at"),
+                        "reading_progress": library_item.get("book_reading_progress", 0),
+                        "quiz_participated": library_item.get("book_quiz_participated", 0),
+                        "quiz_won": library_item.get("book_quiz_won", 0),
+                        "quiz_score": library_item.get("book_quiz_score", 0),
+                        "prizes_won": library_item.get("book_quiz_prizes_won", 0)
+                    }
+                }
+                
+                # Add book details if available in books collection
+                if book_id in book_map:
+                    enriched_item.update(book_map[book_id])
+                else:
+                    # Use the basic info from my_library as fallback
+                    enriched_item.update({
+                        "_id": book_id,
+                        "title": library_item.get("book_name", "Unknown Title"),
+                        "author": library_item.get("book_author", "Unknown Author"),
+                        "cover_image": library_item.get("book_cover"),
+                        "is_from_library_only": True  # Flag to indicate data is from library, not books collection
+                    })
+                
+                enriched_library.append(enriched_item)
+        
+        return {
+            "user_id": userId,
+            "total_books": len(enriched_library),
+            "book_data": enriched_library
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching library: {str(e)}")
+
+
+# ========== REMOVE BOOK FROM LIBRARY ==========
+@router.delete("/user-library/remove-book")
+async def remove_book_from_library(  userId: str = Query(..., description="User ID"), bookId: str = Query(..., description="Book ID")):
+    """
+    Remove a book from user's library
+    """
+    try:
+        if not ObjectId.is_valid(userId):
+            raise HTTPException(status_code=400, detail="Invalid user ID format")
+        
+        user = await users_collection.find_one({"_id": ObjectId(userId)})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        my_library = user.get("my_library", [])
+        
+        # Filter out the book to remove
+        updated_library = [
+            item for item in my_library 
+            if not (isinstance(item, dict) and item.get("book_ids") == bookId)
+        ]
+        
+        # Update the database
+        update_result = await users_collection.update_one(
+            {"_id": ObjectId(userId)},
+            {
+                "$set": {
+                    "my_library": updated_library,
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        removed_count = len(my_library) - len(updated_library)
+        
+        return {
+            "success": True,
+            "message": f"Removed {removed_count} book(s) from library",
+            "books_remaining": len(updated_library)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 #  sign-up with email
 @router.post("/users/register")
