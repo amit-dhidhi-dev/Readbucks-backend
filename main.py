@@ -10,6 +10,7 @@ from utils.pdf_service import process_book
 import asyncio  # Add this import
 import os
 import routes.payment_routes as payment_routes
+import services.search as search_routes
 
 # FastAPI app create karein
 app = FastAPI(
@@ -44,6 +45,11 @@ app.include_router(book_router, prefix="/api/v1")
 
 # Include payment routes
 app.include_router(payment_routes.router)
+
+
+
+# include search routes
+app.include_router(search_routes.router, prefix="/api/v1")
 
 
 
